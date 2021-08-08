@@ -1,0 +1,71 @@
+- name: Rank Master
+  hosts: master
+  tasks:
+    - set_fact: {train_rank: 0}
+
+- name: Rank Workers
+  hosts: workers
+  tasks:
+    - set_fact:
+        train_rank: "{% for host in ansible_play_hosts %}{% if inventory_hostname==host %}{{ loop.index }}{% endif %}{% endfor %}"
+
+- name: Setup
+  hosts: all
+  any_errors_fatal: true
+  tasks:
+  - name: Start Mongo container
+    community.general.docker_container:
+      name: ddl-mongo
+      container_default_behavior: compatibility
+  - name: Drop existing cache
+    command:
+      cmd: docker exec ddl-mongo mongo cache --eval db.cache.drop()
+    register: result
+    until: result.rc == 0
+    retries: 4
+    delay: 2
+  - name: Make collection capped
+    command:
+      # size is required, so I'm making it something so ridiculously big we will never hit it.
+      cmd: docker exec -it ddl-mongo mongo cache --eval db.createCollection(\"cache\",{capped:true,size:100000000000000,max:{{cache_max_items}}})
+    when: cache_max_items|int > 0
+    vars:
+      cache_max_items: 0
+    retries: 4
+    delay: 2
+  - name: Add cache indexes
+    command:
+      cmd: docker exec ddl-mongo mongo cache --eval db.cache.createIndex({"sample_identifier":1,"session_id":1})
+    register: result
+    until: result.rc == 0
+    retries: 4
+    delay: 2
+
+- import_playbook: copy.yml
+
+- name: Generate Benchmark seed
+  hosts: localhost
+  tasks:
+    - set_fact: seed="{{ seed }}"
+      delegate_to: "{{ item }}"
+      delegate_facts: true
+      with_items: "{{ groups['all'] }}"
+      vars:
+        - seed: "{{ (2**16) |random }}"
+
+- name: Run benchmark
+  hosts: all
+  tasks:
+  - name: Start benchmark
+    command: chdir=~/ansible-run/ ~/ansible-run/{{ just_bench |default(false) |ternary('bench.sh', 'run.sh') }} {{ '' if (test_name|default('')) == '' else '-n ' ~ test_name ~ ' ' }}--rank {{ train_rank }}{{ '' if train_rank == 0 else ' --addr ' ~ master_ip }} --port 29500 --world_size {{ world_size }} --batch_size {{ batch_size }} --fetch_size {{ fetch_size }} --seed {{ seed }} --min-queue-size {{ min_queue_size }}
+    async: "{{ async_time }}"
+    poll: "{{ poll_time }}"
+    vars:
+      master_ip: "{{ hostvars['master0']['ansible_default_ipv4'].address |default(hostvars['master0']['ansible_all_ipv4_addresses'][0]) }}"
+      world_size: "{{ ansible_play_hosts |length }}"
+      batch_size: 512
+      fetch_size: 2048
+      min_queue_size: 0
+      # We have to set a value here so we just make it really big for an "infinite" timeout
+      async_time: "{{ just_bench |default(false) |ternary(999999999999999999, 60) }}"
+      poll_time: "{{ just_bench |default(false) |ternary(60, 1) }}"

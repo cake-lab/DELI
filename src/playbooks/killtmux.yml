@@ -1,0 +1,10 @@
+- name: Kill Tmux Panes
+  hosts: all
+  tasks:
+    - command: tmux kill-server
+      when: kill |bool
+  vars_prompt:
+    - name: kill
+      prompt: "Are you sure you want to kill tmux panes? (yes/no)"
+      private: no
+

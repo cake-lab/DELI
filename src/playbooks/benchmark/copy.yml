@@ -1,0 +1,9 @@
+- name: Sync
+  hosts: all
+  tasks:
+    - synchronize:
+        src: ./bench/
+        dirs: true
+        recursive: true
+        copy_links: true
+        dest: ~/ansible-run/
