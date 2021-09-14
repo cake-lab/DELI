@@ -34,8 +34,7 @@ sample_server_sampler = PrefetchSampler(
 # The cache dataset can now be used with PyTorch,
 # just as any other dataset would
 loader = DataLoader(
-    data,
-	batch_size=1024,
+    data, batch_size=1024,
     sampler=sample_server_sampler
 )
 ```
