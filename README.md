@@ -1,6 +1,6 @@
 # DELI 🥪
 
-Nicholas Krichevsky, Matthew St Louis, Tian Guo
+Nicholas Krichevsky, Renee St Louis, Tian Guo
 
 This is the official repository associated with our paper: Quantifying and Improving Performance of Distributed Deep Learning with Cloud Storage, to be published in [IC2E 2021](https://conferences.computer.org/IC2E/2021/).
 
